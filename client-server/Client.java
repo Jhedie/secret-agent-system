@@ -1,10 +1,12 @@
 import java.io.*;
 import java.net.*;
+import java.security.MessageDigest;
+import java.util.Base64;
 
 class Client {
 
     public static void main(String[] args) throws Exception {
-        
+
         if (args.length < 3) {
             System.err.println("Usage: java Client <host> <port> <userid>");
             System.exit(1);
@@ -22,7 +24,13 @@ class Client {
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
             do {
-                System.out.println("Enter a message for the client> "); // prompt the user
+                // Generate hashed userID
+                String hashedUserID = hashUserId(userid);
+
+                dout.writeUTF(hashedUserID); // add to an output stream
+                dout.flush(); // send message
+
+                System.out.println("Enter a message for the server> "); // prompt the user
                 clientString = br.readLine(); // get user input
                 dout.writeUTF(clientString); // add to an output stream
                 dout.flush(); // send message
@@ -41,4 +49,12 @@ class Client {
         }
 
     }
+
+    private static String hashUserId(String userid) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        md.update(("gfhk2024:" + userid).getBytes());
+        byte[] digest = md.digest();
+        return Base64.getEncoder().encodeToString(digest);
+    }
+
 }

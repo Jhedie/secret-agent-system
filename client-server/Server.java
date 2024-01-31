@@ -5,7 +5,7 @@ class Server {
 
     public static void main(String[] args) throws Exception {
         try {
-            String serverString, clientString;
+            String serverString, clientMessage;
 
             if (args.length < 1) {
                 System.err.println("Usage: java Server <port>");
@@ -22,11 +22,14 @@ class Server {
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
             do {
-                clientString = dis.readUTF(); // read input for the client
-                System.out.println("Client says " + clientString);
-                if (clientString.equals("stop")) {
+                clientMessage = dis.readUTF(); // read input for the client
+                System.out.println("Client says " + clientMessage);
+                if (clientMessage.equals("stop")) {
                     break;
                 }
+
+
+                
                 System.out.print("Write something to client > ");// prom
                 serverString = br.readLine(); // read their input
 
