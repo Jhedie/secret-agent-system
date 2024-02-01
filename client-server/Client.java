@@ -1,7 +1,11 @@
-import java.io.*;
-import java.net.*;
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.Socket;
 import java.security.MessageDigest;
-import java.util.Base64;
+import java.security.NoSuchAlgorithmException;
 
 class Client {
 
@@ -15,46 +19,64 @@ class Client {
         int port = Integer.parseInt(args[1]); // port of server
         String userid = args[2]; // user id
 
-        try {
-            String serverString, clientString;
+        try (Socket s = new Socket(host, port);
+                DataInputStream dis = new DataInputStream(s.getInputStream());
+                DataOutputStream dos = new DataOutputStream(s.getOutputStream());
+                BufferedReader br = new BufferedReader(new InputStreamReader(System.in));) {
+            // Generate hashed userID
+            String hashedUserID = hashUserId(userid);
+            dos.writeUTF(hashedUserID); // add to an output stream
+            dos.flush(); // send message
 
-            Socket s = new Socket(host, port);
-            DataInputStream din = new DataInputStream(s.getInputStream());
-            DataOutputStream dout = new DataOutputStream(s.getOutputStream());
-            BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+            Thread readingThread = new Thread(() -> {
+                try {
+                    String msg;
+                    while ((msg = dis.readUTF()) != null) {
+                        System.out.println(msg);
 
-            do {
-                // Generate hashed userID
-                String hashedUserID = hashUserId(userid);
+                        System.out.println("Do you want to send a message? (y/n)");
+                        String userInput = br.readLine();
+                        if ("y".equalsIgnoreCase(userInput)) {
+                            System.out.println("Enter recipient's user id:");
+                            String recipient = br.readLine();
+                            System.out.println("Enter message:");
+                            String message = br.readLine();
 
-                dout.writeUTF(hashedUserID); // add to an output stream
-                dout.flush(); // send message
+                            String messageToSend = recipient + "|" + message;
+                            dos.writeUTF(messageToSend);
+                            break;
+                        } else {
+                            System.out.println("Goodbye!");
+                            break;
+                        }
 
-                System.out.println("Enter a message for the server> "); // prompt the user
-                clientString = br.readLine(); // get user input
-                dout.writeUTF(clientString); // add to an output stream
-                dout.flush(); // send message
-
-                serverString = din.readUTF();
-                if (serverString.equals("stop")) {
-                    break;
+                    }
+                } catch (IOException e) {
+                    System.err.println("Server closed its connection.");
                 }
-                System.out.println("Server says: " + serverString);
+            });
+            readingThread.start();
 
-            } while (!serverString.equals("stop"));
-            dout.close();
-            s.close();
-        } catch (Exception e) {
-            System.out.println(e);
+            // Wait for the reading thread to finish
+            readingThread.join();
+        } catch (IOException | NoSuchAlgorithmException e) {
+            System.out.println("Error: " + e.getMessage());
         }
 
     }
 
-    private static String hashUserId(String userid) throws Exception {
+    private static String hashUserId(String userid) throws NoSuchAlgorithmException {
         MessageDigest md = MessageDigest.getInstance("MD5");
         md.update(("gfhk2024:" + userid).getBytes());
         byte[] digest = md.digest();
-        return Base64.getEncoder().encodeToString(digest);
+        StringBuilder sb = new StringBuilder();
+        for (byte b : digest) {
+            sb.append(String.format("%02X", b));
+        }
+        String s = sb.toString();
+
+        return s;
+
     }
 
 }
