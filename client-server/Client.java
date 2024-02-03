@@ -5,7 +5,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
@@ -48,21 +51,59 @@ class Client {
             dos.writeUTF(hashedUserID); // add to an output stream
             dos.flush(); // send message
 
+            // Create a new thread to read messages from the server
             Thread readingThread = new Thread(() -> {
                 try {
-                    String msg;
-                    while ((msg = dis.readUTF()) != null) {
-                        System.out.println(msg);
 
-                        // Upon receiving these contents,
-                        // the client should first verify the signature with the appropriate key.
-                        // If the key does not verify, it should terminate the connection immediately.
-                        // Otherwise, it decrypts the message with the appropriate key, and displays the
-                        // decrypted message and the timestamp on screen.
+                    while (true) {
+                        String numberOfMessages = dis.readUTF();
+                        System.out.println("There are " + numberOfMessages + " message(s) for you");
+
+                        if (Integer.parseInt(numberOfMessages) > 0) {
+                            for (int i = 0; i < Integer.parseInt(numberOfMessages); i++) {
+
+                                // The server will send the client the following contents
+                                // in the following order:
+                                // 1. The digital signature of the encrypted message
+                                // 2. The timestamp of the message
+                                // 3. The encrypted message
+                                String incomingDigitalSignature = dis.readUTF();
+                                String incomingTimeStamp = dis.readUTF();
+                                String incomingEncryptedMessage = dis.readUTF();
+                                // Upon receiving these contents,
+
+                                String messageToVerify = incomingEncryptedMessage
+                                        + incomingTimeStamp;
+                                byte[] bytesToVerify = messageToVerify.getBytes();
+
+                                // Initialize a Signature object for verification.
+                                Signature signatureForVerification = Signature.getInstance("SHA256withRSA");
+                                signatureForVerification.initVerify(getServerPublicKey());
+                                // update the signature object with the data to be verified
+                                signatureForVerification.update(bytesToVerify);
+                                // If the key does not verify, it should terminate the connection
+                                // immediately.
+                                boolean isVerified = signatureForVerification
+                                        .verify(Base64.getDecoder().decode(incomingDigitalSignature));
+
+                                if (!isVerified) {
+                                    throw new SignatureException(
+                                            "Signature verification failed. Terminating connection.");
+                                }
+                                // Otherwise, it decrypts the message with the appropriate key, and displays the
+                                // decrypted message and the timestamp on screen.
+                                Cipher cipher = Cipher.getInstance("RSA");
+                                cipher.init(Cipher.DECRYPT_MODE, getClientPrivateKey());
+                                byte[] decryptedMessage = cipher
+                                        .doFinal(Base64.getDecoder().decode(incomingEncryptedMessage.getBytes()));
+                                System.out.println("Decrypted message: " + new String(decryptedMessage,
+                                        "UTF-8"));
+                            }
+                        }
 
                         // After displaying all these messages, the client program then asks the user
                         // whether they want to send a message.
-                        System.out.println("Do you want to send a message? (y/n)");
+                        System.out.print("Do you want to send a message? (y/n): ");
                         String userInput = br.readLine();
                         if ("y".equalsIgnoreCase(userInput)) {
                             System.out.println("Enter recipient's user id:");
@@ -78,7 +119,7 @@ class Client {
                             Instant timestamp = getTimestamp();
 
                             // generate a signature
-                            byte[] digitalSignature = getDigitalSignature(encryptedMessage);
+                            byte[] digitalSignature = signDigitalSignature(encryptedMessage);
 
                             // Send the encrypted message, timestamp, signature, and unhashed sender userid
                             // to the server
@@ -94,19 +135,21 @@ class Client {
                             System.out.println("Goodbye!");
                             break;
                         }
-
                     }
+
                 } catch (IOException | InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException
                         | IllegalBlockSizeException | BadPaddingException | InvalidKeySpecException
                         | SignatureException e) {
-                    System.err.println("Error: " + e.getMessage());
+                    e.printStackTrace();
                 }
             });
             readingThread.start();
 
             // Wait for the reading thread to finish
             readingThread.join();
-        } catch (IOException | NoSuchAlgorithmException | InterruptedException e) {
+        } catch (IOException | NoSuchAlgorithmException |
+
+                InterruptedException e) {
             System.out.println("Error: " + e.getMessage());
         }
 
@@ -117,7 +160,7 @@ class Client {
         return timestamp;
     }
 
-    private static byte[] getDigitalSignature(byte[] encryptedMessage) throws NoSuchAlgorithmException,
+    private static byte[] signDigitalSignature(byte[] encryptedMessage) throws NoSuchAlgorithmException,
             InvalidKeyException, IOException, InvalidKeySpecException, SignatureException {
         Signature signature = Signature.getInstance("SHA256withRSA");
         signature.initSign(getClientPrivateKey());
@@ -142,7 +185,8 @@ class Client {
 
     private static PublicKey getServerPublicKey()
             throws IOException, InvalidKeySpecException, NoSuchAlgorithmException {
-        File f = new File("./keypairs/server.pub");
+        Path path = Paths.get(".", "keypairs", "server", "server.pub");
+        File f = path.toFile();
         byte[] keyBytes = Files.readAllBytes(f.toPath());
         X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
         KeyFactory keyFactory;
@@ -156,7 +200,9 @@ class Client {
     private static PrivateKey getClientPrivateKey()
             throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 
-        File f = new File("./keypairs/" + userid + ".prv");
+        Path path = Paths.get(".", "keypairs", userid, userid + ".prv");
+
+        File f = path.toFile();
         byte[] keyBytes = Files.readAllBytes(f.toPath());
         PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
         KeyFactory keyFactory;
