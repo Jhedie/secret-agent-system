@@ -1,4 +1,3 @@
-package bob;
 
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -7,7 +6,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -44,6 +42,7 @@ class Client {
         int port = Integer.parseInt(args[1]); // port of server
         userid = args[2]; // user id
 
+        // use try-with-resources to auto-close the socket
         try (Socket s = new Socket(host, port);
                 DataInputStream dis = new DataInputStream(s.getInputStream());
                 DataOutputStream dos = new DataOutputStream(s.getOutputStream());
@@ -145,9 +144,10 @@ class Client {
                     e.printStackTrace();
                 }
             });
+            // Start waiting for messages from the server
             readingThread.start();
 
-            // Wait for the reading thread to finish
+            // Wait for the reading thread to finish before closing the socket
             readingThread.join();
         } catch (IOException | NoSuchAlgorithmException |
 
