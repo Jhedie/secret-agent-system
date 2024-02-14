@@ -196,7 +196,7 @@ class Server {
 
     public static PublicKey getSenderPublicKey(String userid)
             throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
-        Path path = Paths.get(".", "keypairs", userid, userid + ".pub");
+        Path path = Paths.get(".", userid + ".pub");
         File f = path.toFile();
         if (!f.exists()) {
             throw new IOException("Unrecognized user id");
@@ -212,7 +212,7 @@ class Server {
 
     private static PrivateKey getServerPrivateKey()
             throws IOException, InvalidKeySpecException, NoSuchAlgorithmException {
-        Path path = Paths.get(".", "keypairs", "server", "server.prv");
+        Path path = Paths.get(".", "server.prv");
         File f = path.toFile();
         byte[] keyBytes = Files.readAllBytes(f.toPath());
         PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);

@@ -187,7 +187,7 @@ class Client {
 
     private static PublicKey getServerPublicKey()
             throws IOException, InvalidKeySpecException, NoSuchAlgorithmException {
-        Path path = Paths.get(".", "keypairs", "server", "server.pub");
+        Path path = Paths.get(".", "server.pub");
         File f = path.toFile();
         byte[] keyBytes = Files.readAllBytes(f.toPath());
         X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
@@ -202,7 +202,7 @@ class Client {
     private static PrivateKey getClientPrivateKey()
             throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 
-        Path path = Paths.get(".", "keypairs", userid, userid + ".prv");
+        Path path = Paths.get(".", userid + ".prv");
 
         File f = path.toFile();
         byte[] keyBytes = Files.readAllBytes(f.toPath());
