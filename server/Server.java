@@ -2,6 +2,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -60,7 +61,7 @@ class Server {
     private static final HashMap<String, ArrayList<Message>> MESSAGES = new HashMap<>();
     private static int port = 0;
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
 
         if (args.length < 1) {
             System.err.println("Usage: java Server <port>");
@@ -73,31 +74,26 @@ class Server {
 
         // Create a ServerSocket that listens on the specified port
         try (ServerSocket ss = new ServerSocket(port);) {
+
             while (true) {
                 // Accept a new connection
                 final Socket s = ss.accept();
 
                 // Create a new thread to handle the client associated with the connection
                 new Thread(() -> {
-                    try {
-                        // Handle the client's requests
-                        handleClient(s);
-                    } catch (NoSuchAlgorithmException | InvalidKeyException | InvalidKeySpecException
-                            | SignatureException | NoSuchPaddingException | IllegalBlockSizeException
-                            | BadPaddingException e) {
-                        System.out.println("Error: " + e.getMessage());
-                    }
+
+                    // Handle the client's requests
+                    handleClient(s);
+
                 }).start();
             }
         } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.err.println("Error: The server could not be started.");
         }
 
     }
 
-    private static void handleClient(Socket s)
-            throws NoSuchAlgorithmException, InvalidKeyException, InvalidKeySpecException, SignatureException,
-            NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException {
+    private static void handleClient(Socket s) {
         try (DataInputStream dataInputStream = new DataInputStream(s.getInputStream());
                 DataOutputStream dataOutputStream = new DataOutputStream(s.getOutputStream());) {
 
@@ -114,25 +110,20 @@ class Server {
                 for (Message message : MESSAGES.get(clientMessage)) {
                     // the server generates a signature based on its encrypted content and
                     // timestamp, with a key that proves the identity of the server.
-                    // create signature object for signing with SHA256withRSA
-                    Signature signature = Signature.getInstance("SHA256withRSA");
-                    // get the private key of the server.
-                    PrivateKey serverPrivateKey = getServerPrivateKey();
-                    // initialize the signature object with the private key
                     String messageToSign = message.getText() + message.getTimestamp().toString();
-                    signature.initSign(serverPrivateKey);
-                    // use the signature object to sign the data
-                    signature.update(messageToSign.getBytes());
 
-                    byte[] digitalSignature = signature.sign();
+                    byte[] digitalSignature = signDigitalSignature(messageToSign.getBytes());
                     // The server then sends the message (encrypted content and timestamp) and the
                     // signature to the client.
+                    if (digitalSignature == null) {
+                        throw new SignatureException("Signature generation failed");
+                    }
                     dataOutputStream.writeUTF(Base64.getEncoder().encodeToString(digitalSignature));
                     dataOutputStream.writeUTF(message.getTimestamp().toString());
                     dataOutputStream.writeUTF(message.getText());
                     dataOutputStream.flush();
                 }
-                
+
                 // The message is deleted from the server afterwards.
                 MESSAGES.get(clientMessage).clear();
             }
@@ -153,33 +144,24 @@ class Server {
                 System.out.println("encryptedMessage: \n" + incomingEncryptedMessage);
                 // Upon receiving these contents, the server first verifies the signature with
                 // the appropriate key.
-                // create signature object for verification specified with SHA256withRSA
-                Signature signature = Signature.getInstance("SHA256withRSA");
 
-                // get the public key of the sender
-                // corresponding key of that userid is present in the server) the message is
-                // discarded
-                PublicKey senderPublicKey = getSenderPublicKey(incomingRawUserId);
-                // initialize the signature object with the public key
-                signature.initVerify(senderPublicKey);
+                boolean isVerified = verifySignature(incomingRawUserId,
+                        incomingSignature,
+                        incomingEncryptedMessage,
+                        incomingTimestamp);
 
-                // update the signature object with the original data that was signed
-                signature.update(Base64.getDecoder().decode(incomingEncryptedMessage));
-
-                // verify the signature
-                boolean isVerified = signature.verify(Base64.getDecoder().decode(incomingSignature.getBytes()));
-                // If the signature does not verify, or if the sender userid is unrecognised (no
-                System.out.println("Signature verified: " + isVerified);
+                // If the signature does not verify, or if the sender userid is unrecognised
                 if (!isVerified) {
-                    throw new SignatureException("Signature verification failed. Message discarded.");
+                    throw new SignatureException("Signature verification failed");
                 }
-
                 // Otherwise, it decrypts the message, and finds out the recipient userid.
                 // decrypt the message
                 // If the decryption fails (i.e., it results in a BadPaddingException), the
                 // message is again discarded.
                 String decryptedMessage = decryptMessage(Base64.getDecoder().decode(incomingEncryptedMessage));
-
+                if (decryptedMessage == null) {
+                    throw new BadPaddingException("Decryption failed");
+                }
                 // Split the decrypted message into parts using the "|" character as the
                 // delimiter
                 String[] messageParts = decryptedMessage.split("\\|");
@@ -188,9 +170,17 @@ class Server {
 
                 // The server then re-encrypts the message (but without the recipient userid).
                 String reEncryptedMessage = encryptMessageForRecipient(message, recipientUserId);
+
+                if (reEncryptedMessage == null) {
+                    throw new Exception("Error: Re-encryption failed");
+                }
                 // Finally the server computes the hashed recipient userid, and saves it and the
                 // encrypted message to its collection of messages.
                 String hashedUserId = hashUserId(recipientUserId);
+
+                if (hashedUserId == null) {
+                    throw new Exception("Hashing failed");
+                }
 
                 MESSAGES.putIfAbsent(hashedUserId, new ArrayList<>());
                 MESSAGES.get(hashedUserId).add(new Message(reEncryptedMessage, incomingTimestamp));
@@ -204,86 +194,205 @@ class Server {
 
             }
         } catch (IOException e) {
-            System.err.println("Client closed its connection.");
+            System.err.println("The client has disconnected.\n");
+        } catch (Exception e) {
+            System.out.println("here");
+            System.err.println(e.getMessage());
         }
     }
 
-    public static int getClientMessageCount(String userid) {
-        return MESSAGES.getOrDefault(userid, new ArrayList<>()).size();
+    public static PublicKey getSenderPublicKey(String userid) {
+        try {
 
-    }
+            Path path = Paths.get(".", userid + ".pub");
+            File f = path.toFile();
+            if (!f.exists()) {
+                throw new IOException("Unrecognized user id");
+            }
+            byte[] keyBytes = Files.readAllBytes(f.toPath());
+            X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
+            KeyFactory keyFactory;
+            keyFactory = KeyFactory.getInstance("RSA");
+            PublicKey publicKey = keyFactory.generatePublic(spec);
 
-    public static PublicKey getSenderPublicKey(String userid)
-            throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
-        Path path = Paths.get(".", userid + ".pub");
-        File f = path.toFile();
-        if (!f.exists()) {
-            throw new IOException("Unrecognized user id");
+            return publicKey;
+        } catch (IOException e) {
+            System.err.println(e.getMessage());
+        } catch (InvalidKeySpecException e) {
+            System.err.println("Error: The key specification is invalid.");
+        } catch (NoSuchAlgorithmException e) {
+            System.err.println("Error: The specified algorithm does not exist.");
         }
-        byte[] keyBytes = Files.readAllBytes(f.toPath());
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
-        KeyFactory keyFactory;
-        keyFactory = KeyFactory.getInstance("RSA");
-        PublicKey publicKey = keyFactory.generatePublic(spec);
-
-        return publicKey;
+        return null;
     }
 
-    private static PrivateKey getServerPrivateKey()
-            throws IOException, InvalidKeySpecException, NoSuchAlgorithmException {
-        Path path = Paths.get(".", "server.prv");
-        File f = path.toFile();
-        byte[] keyBytes = Files.readAllBytes(f.toPath());
-        PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
-        KeyFactory kf = KeyFactory.getInstance("RSA");
-        return kf.generatePrivate(spec);
-    }
-
-    private static String decryptMessage(byte[] encryptedMessage)
-            throws IOException, NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException,
-            NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException {
-        // Decrypt the message
-        // get the private key of the server
-        PrivateKey serverPrivateKey = getServerPrivateKey();
-        // create a cipher object for decryption
-        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-        // initialize the cipher object with the private key
-        cipher.init(Cipher.DECRYPT_MODE, serverPrivateKey);
-        // decrypt the message
-        byte[] decryptedMessage = cipher.doFinal(encryptedMessage);
-
-        String decryptedMessageString = new String(decryptedMessage, "UTF-8");
-
-        return decryptedMessageString;
-    }
-
-    private static String hashUserId(String userid) throws NoSuchAlgorithmException {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        md.update(("gfhk2024:" + userid).getBytes());
-        byte[] digest = md.digest();
-        StringBuilder sb = new StringBuilder();
-        for (byte b : digest) {
-            sb.append(String.format("%02X", b));
+    private static PrivateKey getServerPrivateKey() {
+        try {
+            Path path = Paths.get(".", "server.prv");
+            File f = path.toFile();
+            byte[] keyBytes = Files.readAllBytes(f.toPath());
+            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
+            KeyFactory kf = KeyFactory.getInstance("RSA");
+            return kf.generatePrivate(spec);
+        } catch (IOException e) {
+            System.err.println("Error: The file could not be read.");
+        } catch (InvalidKeySpecException e) {
+            System.err.println("Error: The key specification is invalid.");
+        } catch (NoSuchAlgorithmException e) {
+            System.err.println("Error: The specified algorithm does not exist.");
         }
-        String hashedString = sb.toString();
-
-        return hashedString;
+        return null;
 
     }
 
-    private static String encryptMessageForRecipient(String message, String recipientUserId)
-            throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException,
-            BadPaddingException, InvalidKeySpecException, IOException {
-        // get the public key of the recipient
-        PublicKey recipientPublicKey = getSenderPublicKey(recipientUserId);
-        // create a cipher object for encryption
-        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-        // initialize the cipher object with the public key
-        cipher.init(Cipher.ENCRYPT_MODE, recipientPublicKey);
-        // encrypt the message
-        byte[] encryptedMessage = cipher.doFinal(message.getBytes());
-        // return the encrypted message as a Base64-encoded string
-        return Base64.getEncoder().encodeToString(encryptedMessage);// return the encrypted message as a Base64-encoded
+    private static String decryptMessage(byte[] encryptedMessage) {
+        try {
+            // Decrypt the message
+            // get the private key of the server
+            PrivateKey serverPrivateKey = getServerPrivateKey();
+            if (serverPrivateKey == null) {
+                throw new InvalidKeyException("Server private key not found");
+            }
+            // create a cipher object for decryption
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            // initialize the cipher object with the private key
+            cipher.init(Cipher.DECRYPT_MODE, serverPrivateKey);
+            // decrypt the message
+            byte[] decryptedMessage = cipher.doFinal(encryptedMessage);
+
+            String decryptedMessageString = new String(decryptedMessage, "UTF-8");
+
+            return decryptedMessageString;
+        } catch (NoSuchAlgorithmException e) {
+            System.err.println("Error: The specified algorithm does not exist.");
+        } catch (NoSuchPaddingException e) {
+            System.err.println("Error: The specified padding scheme does not exist.");
+        } catch (InvalidKeyException e) {
+            System.err.println("Error: " + e.getMessage());
+        } catch (IllegalBlockSizeException e) {
+            System.err.println("Error: The provided block size is invalid.");
+        } catch (BadPaddingException e) {
+            System.err.println("Error: The padding is incorrect.");
+        } catch (UnsupportedEncodingException e) {
+            System.err.println("Error: The encoding is not supported.");
+
+        }
+        return null;
+    }
+
+    private static String hashUserId(String userid) {
+
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(("gfhk2024:" + userid).getBytes());
+            byte[] digest = md.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02X", b));
+            }
+            String hashedString = sb.toString();
+
+            return hashedString;
+        } catch (NoSuchAlgorithmException e) {
+            System.err.println("Error: The specified algorithm does not exist.");
+        }
+        return null;
+
+    }
+
+    private static String encryptMessageForRecipient(String message, String recipientUserId) {
+        try {
+
+            // get the public key of the recipient
+            PublicKey recipientPublicKey = getSenderPublicKey(recipientUserId);
+            if (recipientPublicKey == null) {
+                throw new InvalidKeyException("Recipient public key not found");
+            }
+            // create a cipher object for encryption
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            // initialize the cipher object with the public key
+            cipher.init(Cipher.ENCRYPT_MODE, recipientPublicKey);
+            // encrypt the message
+            byte[] encryptedMessage = cipher.doFinal(message.getBytes());
+            // return the encrypted message as a Base64-encoded string
+            return Base64.getEncoder().encodeToString(encryptedMessage);
+        } catch (NoSuchAlgorithmException e) {
+            System.err.println("Error: The specified algorithm does not exist.");
+        } catch (NoSuchPaddingException e) {
+            System.err.println("Error: The specified padding scheme does not exist.");
+        } catch (InvalidKeyException e) {
+            System.err.println("Error: The provided key is invalid.");
+        } catch (IllegalBlockSizeException e) {
+            System.err.println("Error: The provided block size is invalid.");
+        } catch (BadPaddingException e) {
+            System.err.println("Error: The padding is incorrect.");
+        }
+
+        return null;
+    }
+
+    private static byte[] signDigitalSignature(byte[] encryptedMessage) {
+
+        try {
+            // create signature object for signing with SHA256withRSA
+            Signature signature = Signature.getInstance("SHA256withRSA");
+            // get the private key of the server.
+            PrivateKey serverPrivateKey = getServerPrivateKey();
+            if (serverPrivateKey == null) {
+                throw new InvalidKeyException("Server private key not found");
+            }
+            // initialize the signature object with the private key
+            signature.initSign(serverPrivateKey);
+            // use the signature object to sign the data
+            signature.update(encryptedMessage);
+
+            byte[] digitalSignature = signature.sign();
+            return digitalSignature;
+
+        } catch (NoSuchAlgorithmException e) {
+            System.err.println("Error: The specified algorithm does not exist.");
+        } catch (InvalidKeyException e) {
+            System.err.println(e.getMessage());
+        } catch (SignatureException e) {
+            System.err.println("Error: The signature is invalid.");
+        }
+        return null;
+    }
+
+    private static boolean verifySignature(String incomingRawUserId, String incomingSignature,
+            String incomingEncryptedMessage,
+            String incomingTimestamp) throws SignatureException {
+        try {
+
+            // create signature object for verification specified with SHA256withRSA
+            Signature signature = Signature.getInstance("SHA256withRSA");
+
+            // get the public key of the sender
+            // corresponding key of that userid is present in the server) the message is
+            // discarded
+            PublicKey senderPublicKey = getSenderPublicKey(incomingRawUserId);
+
+            if (senderPublicKey == null) {
+                throw new InvalidKeyException("Sender public key not found");
+            }
+
+            // initialize the signature object with the public key
+            signature.initVerify(senderPublicKey);
+
+            // update the signature object with the original data that was signed
+            signature.update(Base64.getDecoder().decode(incomingEncryptedMessage));
+
+            Boolean isVerified = signature.verify(Base64.getDecoder().decode(incomingSignature.getBytes()));
+
+            return isVerified;
+        } catch (NoSuchAlgorithmException e) {
+            System.err.println("Error: The specified algorithm does not exist.");
+        } catch (InvalidKeyException e) {
+            System.err.println(e.getMessage());
+        }
+
+        return false;
+
     }
 
 }
