@@ -131,9 +131,9 @@ class Server {
                     dataOutputStream.writeUTF(message.getTimestamp().toString());
                     dataOutputStream.writeUTF(message.getText());
                     dataOutputStream.flush();
-                    // The message is deleted from the server afterwards.
                 }
-
+                
+                // The message is deleted from the server afterwards.
                 MESSAGES.get(clientMessage).clear();
             }
             while (true) {
@@ -246,7 +246,7 @@ class Server {
         // get the private key of the server
         PrivateKey serverPrivateKey = getServerPrivateKey();
         // create a cipher object for decryption
-        Cipher cipher = Cipher.getInstance("RSA");
+        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         // initialize the cipher object with the private key
         cipher.init(Cipher.DECRYPT_MODE, serverPrivateKey);
         // decrypt the message
@@ -277,7 +277,7 @@ class Server {
         // get the public key of the recipient
         PublicKey recipientPublicKey = getSenderPublicKey(recipientUserId);
         // create a cipher object for encryption
-        Cipher cipher = Cipher.getInstance("RSA");
+        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         // initialize the cipher object with the public key
         cipher.init(Cipher.ENCRYPT_MODE, recipientPublicKey);
         // encrypt the message

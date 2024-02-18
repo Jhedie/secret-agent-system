@@ -116,7 +116,7 @@ class Client {
 
                             // Prepare the message to be encrypted
                             String messageToSend = recipient + "|" + message;
-                            byte[] encryptedMessage = encryptMessage(messageToSend);
+                            byte[] encryptedMessage = getEncryptMessage(messageToSend);
 
                             // generate a signature
                             byte[] digitalSignature = signDigitalSignature(encryptedMessage);
@@ -172,7 +172,7 @@ class Client {
     private static byte[] getDecryptedMessage(String incomingEncryptedMessage)
             throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IOException,
             InvalidKeySpecException, IllegalBlockSizeException, BadPaddingException {
-        Cipher cipher = Cipher.getInstance("RSA");
+        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         cipher.init(Cipher.DECRYPT_MODE, getClientPrivateKey());
         byte[] decryptedMessage = cipher
                 .doFinal(Base64.getDecoder().decode(incomingEncryptedMessage.getBytes()));
@@ -226,12 +226,12 @@ class Client {
 
     }
 
-    private static byte[] encryptMessage(String message)
+    private static byte[] getEncryptMessage(String message)
             throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException,
             BadPaddingException, InvalidKeySpecException, IOException {
 
         PublicKey serverPublicKey = getServerPublicKey();
-        Cipher cipher = Cipher.getInstance("RSA");
+        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey);
         byte[] encryptedMessage = cipher.doFinal(message.getBytes());
 
