@@ -19,11 +19,8 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Date;
 import java.util.HashMap;
 
 import javax.crypto.BadPaddingException;
@@ -148,11 +145,7 @@ class Server {
                 String incomingEncryptedMessage = dataInputStream.readUTF();
 
                 System.out.println("Incoming message from: " + incomingRawUserId);
-                String formattedDate = formatTimestamp(incomingTimestamp);
-                if (formattedDate == null) {
-                    throw new ParseException("Error: Date parsing failed", 0);
-                }
-                System.out.println("Timestamp: " + formattedDate);
+                System.out.println("Date: " + incomingTimestamp);
                 // Upon receiving these contents, the server first verifies the signature with
                 // the appropriate key.
 
@@ -212,18 +205,6 @@ class Server {
         } catch (Exception e) {
             System.err.println(e.getMessage());
         }
-    }
-
-    public static String formatTimestamp(String incomingTimestamp) {
-        try {
-            SimpleDateFormat incomingFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-            Date date = incomingFormat.parse(incomingTimestamp);
-            SimpleDateFormat outgoingFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-            return outgoingFormat.format(date);
-        } catch (ParseException e) {
-            System.err.println("Failed to parse date: " + e.getMessage());
-        }
-        return null;
     }
 
     public static PublicKey getSenderPublicKey(String userid) {

@@ -19,11 +19,10 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
+import java.util.TimeZone;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -108,12 +107,7 @@ class Client {
                                 }
                                 String decryptedMessage = new String(decryptedMessageInBytes, "UTF-8");
 
-                                // Format the timestamp to a more readable format
-                                String formattedDate = formatTimestamp(incomingTimeStamp);
-                                if (formattedDate == null) {
-                                    throw new ParseException("Error: Date parsing failed", 0);
-                                }
-                                System.out.println("Date: " + formattedDate);
+                                System.out.println("Date: " + incomingTimeStamp);
                                 System.out.println("Message: " + decryptedMessage + "\n\n");
                             }
                         }
@@ -182,18 +176,6 @@ class Client {
         }
     }
 
-    public static String formatTimestamp(String incomingTimestamp) {
-        try {
-            SimpleDateFormat incomingFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-            Date date = incomingFormat.parse(incomingTimestamp);
-            SimpleDateFormat outgoingFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-            return outgoingFormat.format(date);
-        } catch (ParseException e) {
-            System.err.println("Failed to parse date: " + e.getMessage());
-        }
-        return null;
-    }
-
     private static byte[] getDecryptedMessage(String incomingEncryptedMessage) {
 
         try {
@@ -252,9 +234,18 @@ class Client {
         return false;
     }
 
-    private static String getTimestamp() {
-        Instant timestamp = Instant.now();
-        return timestamp.toString();
+    public static String getTimestamp() {
+        // Create a date object for the current date and time
+        Date now = new Date();
+
+        // Create a SimpleDateFormat object with the desired format
+        SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
+
+        // Set the time zone to GMT
+        sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+        // Format the current date
+        return sdf.format(now);
     }
 
     private static byte[] signDigitalSignature(byte[] encryptedMessage) {
