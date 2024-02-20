@@ -73,6 +73,9 @@ class Server {
 
         port = Integer.parseInt(args[0]);
 
+        System.out.println("Server program");
+        System.out.println("--------------");
+
         System.out.println("Waiting incoming connection...");
 
         // Create a ServerSocket that listens on the specified port
@@ -104,12 +107,11 @@ class Server {
             System.out.println("login from user " + clientMessage);
             MESSAGES.putIfAbsent(clientMessage, new ArrayList<>());
 
-            System.out.println("Delivering " + MESSAGES.get(clientMessage).size() + " MESSAGES");
             dataOutputStream.writeUTF(String.valueOf(MESSAGES.get(clientMessage).size()));
             dataOutputStream.flush();
             // If this number is not zero, then for each such message,
             if (MESSAGES.get(clientMessage).size() > 0) {
-                System.out.println("messages available");
+                System.out.println("Delivering " + MESSAGES.get(clientMessage).size() + " message(s)...");
                 for (Message message : MESSAGES.get(clientMessage)) {
                     // the server generates a signature based on its encrypted content and
                     // timestamp, with a key that proves the identity of the server.
@@ -130,6 +132,8 @@ class Server {
 
                 // The message is deleted from the server afterwards.
                 MESSAGES.get(clientMessage).clear();
+            } else {
+                System.out.println("No incoming messages");
             }
             while (true) {
                 // The server receives a message from the client in the following order:

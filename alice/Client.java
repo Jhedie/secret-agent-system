@@ -46,6 +46,9 @@ class Client {
         port = Integer.parseInt(args[1]);
         userid = args[2];
 
+        System.out.println("Client program");
+        System.out.println("--------------");
+
         // Guard for ensuring that a user does not attempt to access or send from
         // another user's account. This is done by attempting to find the priv key of
         // the user
@@ -110,7 +113,7 @@ class Client {
                                 if (formattedDate != null) {
                                     System.out.println("Date: " + formattedDate);
                                 }
-                                System.out.println("Message: " + decryptedMessage);
+                                System.out.println("Message: " + decryptedMessage + "\n\n");
                             }
                         }
 
