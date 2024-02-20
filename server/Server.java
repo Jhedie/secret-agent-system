@@ -177,14 +177,14 @@ class Server {
                 }
                 // Finally the server computes the hashed recipient userid, and saves it and the
                 // encrypted message to its collection of messages.
-                String hashedUserId = hashUserId(recipientUserId);
+                String recomputeHashedUserId = hashUserId(recipientUserId);
 
-                if (hashedUserId == null) {
+                if (recomputeHashedUserId == null) {
                     throw new Exception("Hashing failed");
                 }
 
-                MESSAGES.putIfAbsent(hashedUserId, new ArrayList<>());
-                MESSAGES.get(hashedUserId).add(new Message(reEncryptedMessage, incomingTimestamp));
+                MESSAGES.putIfAbsent(recomputeHashedUserId, new ArrayList<>());
+                MESSAGES.get(recomputeHashedUserId).add(new Message(reEncryptedMessage, incomingTimestamp));
 
                 // The original (unhashed) recipient userid is not stored. The signature is also
                 // not stored.
