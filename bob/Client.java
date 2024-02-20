@@ -110,9 +110,10 @@ class Client {
 
                                 // Format the timestamp to a more readable format
                                 String formattedDate = formatTimestamp(incomingTimeStamp);
-                                if (formattedDate != null) {
-                                    System.out.println("Date: " + formattedDate);
+                                if (formattedDate == null) {
+                                    throw new ParseException("Error: Date parsing failed", 0);
                                 }
+                                System.out.println("Date: " + formattedDate);
                                 System.out.println("Message: " + decryptedMessage + "\n\n");
                             }
                         }
@@ -189,8 +190,8 @@ class Client {
             return outgoingFormat.format(date);
         } catch (ParseException e) {
             System.err.println("Failed to parse date: " + e.getMessage());
-            return null;
         }
+        return null;
     }
 
     private static byte[] getDecryptedMessage(String incomingEncryptedMessage) {

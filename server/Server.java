@@ -62,6 +62,7 @@ class Server {
      * has sent or received.
      */
     private static final HashMap<String, ArrayList<Message>> MESSAGES = new HashMap<>();
+
     private static int port = 0;
 
     public static void main(String[] args) {
@@ -148,9 +149,10 @@ class Server {
 
                 System.out.println("Incoming message from: " + incomingRawUserId);
                 String formattedDate = formatTimestamp(incomingTimestamp);
-                if (formattedDate != null) {
-                    System.out.println("Date: " + formattedDate);
+                if (formattedDate == null) {
+                    throw new ParseException("Error: Date parsing failed", 0);
                 }
+                System.out.println("Timestamp: " + formattedDate);
                 // Upon receiving these contents, the server first verifies the signature with
                 // the appropriate key.
 
@@ -192,6 +194,8 @@ class Server {
                     throw new Exception("Hashing failed");
                 }
 
+                // The server then saves the re-encrypted message and the timestamp to its
+                // collection of messages.
                 MESSAGES.putIfAbsent(recomputeHashedUserId, new ArrayList<>());
                 MESSAGES.get(recomputeHashedUserId).add(new Message(reEncryptedMessage, incomingTimestamp));
 
@@ -218,8 +222,8 @@ class Server {
             return outgoingFormat.format(date);
         } catch (ParseException e) {
             System.err.println("Failed to parse date: " + e.getMessage());
-            return null;
         }
+        return null;
     }
 
     public static PublicKey getSenderPublicKey(String userid) {
