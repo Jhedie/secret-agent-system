@@ -110,7 +110,8 @@ class Server {
                 for (Message message : MESSAGES.get(clientMessage)) {
                     // the server generates a signature based on its encrypted content and
                     // timestamp, with a key that proves the identity of the server.
-                    String messageToSign = message.getText() + message.getTimestamp().toString();
+                    String messageToSign = new String(Base64.getDecoder().decode(message.getText()), "UTF-8")
+                            + message.getTimestamp();
 
                     byte[] digitalSignature = signDigitalSignature(messageToSign.getBytes());
                     // The server then sends the message (encrypted content and timestamp) and the
@@ -119,7 +120,7 @@ class Server {
                         throw new SignatureException("Signature generation failed");
                     }
                     dataOutputStream.writeUTF(Base64.getEncoder().encodeToString(digitalSignature));
-                    dataOutputStream.writeUTF(message.getTimestamp().toString());
+                    dataOutputStream.writeUTF(message.getTimestamp());
                     dataOutputStream.writeUTF(message.getText());
                     dataOutputStream.flush();
                 }
@@ -196,7 +197,6 @@ class Server {
         } catch (IOException e) {
             System.err.println("The client has disconnected.\n");
         } catch (Exception e) {
-            System.out.println("here");
             System.err.println(e.getMessage());
         }
     }
@@ -379,16 +379,22 @@ class Server {
             // initialize the signature object with the public key
             signature.initVerify(senderPublicKey);
 
+            // get the original data that was signed
+            String dataToVerify = new String(Base64.getDecoder().decode(incomingEncryptedMessage), "UTF-8")
+                    + incomingTimestamp;
             // update the signature object with the original data that was signed
-            signature.update(Base64.getDecoder().decode(incomingEncryptedMessage));
+            signature.update(dataToVerify.getBytes());
 
             Boolean isVerified = signature.verify(Base64.getDecoder().decode(incomingSignature.getBytes()));
 
             return isVerified;
+
         } catch (NoSuchAlgorithmException e) {
             System.err.println("Error: The specified algorithm does not exist.");
         } catch (InvalidKeyException e) {
             System.err.println(e.getMessage());
+        } catch (UnsupportedEncodingException e) {
+            System.err.println("Error: The encoding is not supported.");
         }
 
         return false;

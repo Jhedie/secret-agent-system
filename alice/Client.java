@@ -116,7 +116,7 @@ class Client {
                         System.out.print("Do you want to send a message? (y/n): ");
                         String userInput = bufferedReader.readLine();
                         if ("y".equalsIgnoreCase(userInput)) {
-                            System.out.print("Enter recipient's user id: ");
+                            System.out.print("Enter the recipient's user id: ");
                             String recipient = bufferedReader.readLine();
                             System.out.print("Enter your message: ");
                             String message = bufferedReader.readLine();
@@ -128,8 +128,11 @@ class Client {
                                 throw new Exception("Error: Encryption Failed");
                             }
 
+                            // Generate a timestamp
+                            String timestamp = getTimestamp();
+                            String dataToSign = new String(encryptedMessage, "UTF-8") + timestamp;
                             // generate a signature
-                            byte[] digitalSignature = signDigitalSignature(encryptedMessage);
+                            byte[] digitalSignature = signDigitalSignature(dataToSign.getBytes());
                             if (digitalSignature == null) {
                                 throw new SignatureException("Error: Signature Failed");
                             }
@@ -137,9 +140,6 @@ class Client {
                             // encode the encrypted message and digital signature to base64
                             String digitalSignatureString = Base64.getEncoder().encodeToString(digitalSignature);
                             String encryptedMessageString = Base64.getEncoder().encodeToString(encryptedMessage);
-
-                            // Generate a timestamp
-                            String timestamp = getTimestamp();
 
                             // print the digital signature, timestamp, and encrypted message
                             System.out.println("Digital Signature: " + digitalSignatureString);
@@ -210,7 +210,7 @@ class Client {
     private static boolean verifySignature(String incomingDigitalSignature, String incomingTimeStamp,
             String incomingEncryptedMessage) throws SignatureException {
         try {
-            String messageToVerify = incomingEncryptedMessage
+            String messageToVerify = new String(Base64.getDecoder().decode(incomingEncryptedMessage))
                     + incomingTimeStamp;
             byte[] mesageToVerifyInBytes = messageToVerify.getBytes();
 
