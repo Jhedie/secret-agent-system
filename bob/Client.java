@@ -19,8 +19,11 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Date;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -71,7 +74,7 @@ class Client {
                 try {
                     while (true) {
                         String numberOfMessages = dataInputStream.readUTF();
-                        System.out.println("There are " + numberOfMessages + " message(s) for you");
+                        System.out.println("There are " + numberOfMessages + " message(s) for you\n");
 
                         if (Integer.parseInt(numberOfMessages) > 0) {
                             for (int i = 0; i < Integer.parseInt(numberOfMessages); i++) {
@@ -84,11 +87,6 @@ class Client {
                                 String incomingDigitalSignature = dataInputStream.readUTF();
                                 String incomingTimeStamp = dataInputStream.readUTF();
                                 String incomingEncryptedMessage = dataInputStream.readUTF();
-
-                                // print the digital signature, timestamp, and encrypted message
-                                System.out.println("Digital Signature: " + incomingDigitalSignature);
-                                System.out.println("Timestamp: " + incomingTimeStamp);
-                                System.out.println("Encrypted Message: " + incomingEncryptedMessage);
 
                                 // Upon receiving above contents, verify
                                 boolean isVerified = verifySignature(incomingDigitalSignature, incomingTimeStamp,
@@ -106,14 +104,19 @@ class Client {
                                     throw new Exception("Error: Decryption Failed");
                                 }
                                 String decryptedMessage = new String(decryptedMessageInBytes, "UTF-8");
-                                System.out.println("Date: " + incomingTimeStamp);
+
+                                // Format the timestamp to a more readable format
+                                String formattedDate = formatTimestamp(incomingTimeStamp);
+                                if (formattedDate != null) {
+                                    System.out.println("Date: " + formattedDate);
+                                }
                                 System.out.println("Message: " + decryptedMessage);
                             }
                         }
 
                         // After displaying all these messages, the client program then asks the user
                         // whether they want to send a message.
-                        System.out.print("Do you want to send a message? (y/n): ");
+                        System.out.print("Do you want to send a message? [y/n]: ");
                         String userInput = bufferedReader.readLine();
                         if ("y".equalsIgnoreCase(userInput)) {
                             System.out.print("Enter the recipient's user id: ");
@@ -140,11 +143,6 @@ class Client {
                             // encode the encrypted message and digital signature to base64
                             String digitalSignatureString = Base64.getEncoder().encodeToString(digitalSignature);
                             String encryptedMessageString = Base64.getEncoder().encodeToString(encryptedMessage);
-
-                            // print the digital signature, timestamp, and encrypted message
-                            System.out.println("Digital Signature: " + digitalSignatureString);
-                            System.out.println("Timestamp: " + timestamp);
-                            System.out.println("Encrypted Message: " + encryptedMessageString);
 
                             // Send the encrypted message, timestamp, signature, and unhashed sender userid
                             // to the server
@@ -177,6 +175,18 @@ class Client {
 
         } catch (Exception e) {
             System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    public static String formatTimestamp(String incomingTimestamp) {
+        try {
+            SimpleDateFormat incomingFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            Date date = incomingFormat.parse(incomingTimestamp);
+            SimpleDateFormat outgoingFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
+            return outgoingFormat.format(date);
+        } catch (ParseException e) {
+            System.err.println("Failed to parse date: " + e.getMessage());
+            return null;
         }
     }
 

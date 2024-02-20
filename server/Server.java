@@ -19,8 +19,11 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Date;
 import java.util.HashMap;
 
 import javax.crypto.BadPaddingException;
@@ -139,10 +142,11 @@ class Server {
                 String incomingTimestamp = dataInputStream.readUTF();
                 String incomingEncryptedMessage = dataInputStream.readUTF();
 
-                System.out.println("rawUserId: \n" + incomingRawUserId);
-                System.out.println("signature: \n" + incomingSignature);
-                System.out.println("timestamp: \n" + incomingTimestamp);
-                System.out.println("encryptedMessage: \n" + incomingEncryptedMessage);
+                System.out.println("Incoming message from: " + incomingRawUserId);
+                String formattedDate = formatTimestamp(incomingTimestamp);
+                if (formattedDate != null) {
+                    System.out.println("Date: " + formattedDate);
+                }
                 // Upon receiving these contents, the server first verifies the signature with
                 // the appropriate key.
 
@@ -168,6 +172,7 @@ class Server {
                 String[] messageParts = decryptedMessage.split("\\|");
                 String recipientUserId = messageParts[0];
                 String message = messageParts[1];
+                System.out.println("Message: " + message);
 
                 // The server then re-encrypts the message (but without the recipient userid).
                 String reEncryptedMessage = encryptMessageForRecipient(message, recipientUserId);
@@ -198,6 +203,18 @@ class Server {
             System.err.println("The client has disconnected.\n");
         } catch (Exception e) {
             System.err.println(e.getMessage());
+        }
+    }
+
+    public static String formatTimestamp(String incomingTimestamp) {
+        try {
+            SimpleDateFormat incomingFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            Date date = incomingFormat.parse(incomingTimestamp);
+            SimpleDateFormat outgoingFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
+            return outgoingFormat.format(date);
+        } catch (ParseException e) {
+            System.err.println("Failed to parse date: " + e.getMessage());
+            return null;
         }
     }
 
